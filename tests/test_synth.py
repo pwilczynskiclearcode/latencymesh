@@ -5,7 +5,7 @@ import pytest
 
 from latencymesh.geo import min_rtt_ms
 from latencymesh.model import Location
-from latencymesh.synth import WorldConfig, _erfinv, generate_world
+from latencymesh.synth import WorldConfig, generate_world
 
 
 @pytest.fixture(scope="module")
@@ -67,10 +67,3 @@ def test_genesis_from_world_validates(world) -> None:  # type: ignore[no-untyped
     g = world.genesis()
     assert len(g.nodes) == 40
     assert len(g.rtt) == 40 * 39 // 2
-
-
-def test_erfinv() -> None:
-    import math
-
-    for y in (-0.99, -0.5, 0.0, 0.3, 0.999):
-        assert math.erf(_erfinv(y)) == pytest.approx(y, abs=1e-9)

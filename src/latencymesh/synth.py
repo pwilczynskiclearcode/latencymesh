@@ -22,6 +22,7 @@ import hashlib
 import math
 import random
 from dataclasses import dataclass, field
+from statistics import NormalDist
 
 from .genesis import Genesis
 from .geo import min_rtt_ms
@@ -67,6 +68,8 @@ CITIES: tuple[tuple[str, str, Continent, float, float], ...] = (
     ("Nairobi", "KE", Continent.AFRICA, -1.29, 36.82),
     ("Cairo", "EG", Continent.AFRICA, 30.04, 31.24),
 )
+
+_STD_NORMAL = NormalDist()
 
 #: Synthetic AS numbers from the private-use range (RFC 6996); no real operators implied.
 PRIVATE_ASN_BASE = 64512
@@ -122,8 +125,7 @@ class World:
     def detour(self, a: NodeId, b: NodeId) -> float:
         c = self.config
         u = self._u(a, b, "detour")
-        # inverse-CDF of the normal via the error function (no scipy dependency)
-        z = math.sqrt(2) * _erfinv(2 * u - 1)
+        z = _STD_NORMAL.inv_cdf(u)
         return min(c.max_detour, 1.0 + math.exp(c.detour_mu + c.detour_sigma * z))
 
     def tiv_inflation(self, a: NodeId, b: NodeId) -> float:
@@ -250,41 +252,3 @@ def _offset(lat: float, lon: float, km: float, bearing_deg: float) -> tuple[floa
     dlon = (km * math.sin(b)) / (111.32 * max(0.1, math.cos(math.radians(lat))))
     new_lon = (lon + dlon + 180.0) % 360.0 - 180.0
     return max(-90.0, min(90.0, lat + dlat)), new_lon
-
-
-def _erfinv(y: float) -> float:
-    """Inverse error function (Giles 2010 single-precision approximation, refined by Newton)."""
-    y = max(-1 + 1e-15, min(1 - 1e-15, y))
-    w = -math.log((1.0 - y) * (1.0 + y))
-    if w < 5.0:
-        w -= 2.5
-        p = 2.81022636e-08
-        for coef in (
-            3.43273939e-07,
-            -3.5233877e-06,
-            -4.39150654e-06,
-            0.00021858087,
-            -0.00125372503,
-            -0.00417768164,
-            0.246640727,
-            1.50140941,
-        ):
-            p = coef + p * w
-    else:
-        w = math.sqrt(w) - 3.0
-        p = -0.000200214257
-        for coef in (
-            0.000100950558,
-            0.00134934322,
-            -0.00367342844,
-            0.00573950773,
-            -0.0076224613,
-            0.00943887047,
-            1.00167406,
-            2.83297682,
-        ):
-            p = coef + p * w
-    x = p * y
-    for _ in range(2):  # Newton steps on erf(x) - y
-        x -= (math.erf(x) - y) / (2 / math.sqrt(math.pi) * math.exp(-x * x))
-    return x

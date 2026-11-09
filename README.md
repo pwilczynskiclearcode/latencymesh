@@ -34,7 +34,7 @@ frequency stays uniform. Everything runs from a seed, so experiments are reprodu
 
 ```bash
 uv venv && uv pip install -e ".[dev]"
-uv run pytest
+uv run pytest          # verbose, with a branch-coverage report
 ```
 
 ## A taste
@@ -107,6 +107,9 @@ relative to nodes that are already accepted.
 | Selection | Power-of-two-choices balancing | Azar et al. 1999; Mitzenmacher 2001 |
 | Selection | Systematic sampling along a Hilbert curve | classic survey-sampling technique |
 | Shuffling | Swap-or-not shuffle | Hoang, Morris & Rogaway, CRYPTO 2012 |
+
+Where every algorithm comes from and why its use is compatible with the MIT license is
+documented in [docs/REFERENCES.md](docs/REFERENCES.md).
 
 ## License
 
