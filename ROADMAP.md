@@ -8,7 +8,7 @@
 - [x] Network coordinates: GNP, Vivaldi
 - [x] Selection strategies: uniform, balanced (power of two), dispersed (Hilbert systematic, farthest point),
       around a node, k nearest, iterative nearest-neighbour search
-- [ ] Hierarchical clustering (datacenter / city / country / continent), CBG geolocation
+- [x] Hierarchical clustering (datacenter / city / country / continent), CBG geolocation
 - [ ] EVM layer: titanoboa harness, node registry with commit-reveal measurements, token audit kit
 
 ## 0.2 – adversaries
@@ -21,6 +21,13 @@
 - [ ] Merkle commitments of off-chain measurement tables, fraud proofs
 - [ ] Re-measurement audits and slashing
 - [ ] Gas / storage cost reports per protocol variant
+
+## Known limitations to work on
+- [ ] CBG bestlines calibrated on landmark pairs are too tight for roughly half of the targets
+      (the sound speed-of-light radii are used then); try robust/quantile bestlines
+- [ ] Country-level clustering from RTT alone is weak (~0.5 pair precision on synthetic worlds);
+      calibrate with trusted nodes' country labels
+- [ ] Clustering is O(n²) memory; use coordinates + grid bucketing for 10k+ nodes
 
 ## Later
 - [ ] Import real latency datasets (e.g. public ping matrices) as ground truth

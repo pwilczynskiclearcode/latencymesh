@@ -8,6 +8,8 @@ The model is intentionally simple but captures what matters for proximity protoc
 * **triangle-inequality violations (TIVs)**: a fraction of pairs gets an extra, large
   inflation (policy routing, peering disputes) which no metric embedding can represent,
 * **access delay**: per-node last-mile latency (low in datacenters, high at home),
+* **inter-network hop**: traffic between different ASes crosses an exchange point,
+  adding a small per-pair delay even inside one metro area,
 * **jitter**: positive, heavy-tailed queueing delay per sample.
 
 Per-pair parameters are derived from a hash of ``(seed, pair)`` so the model needs O(n)
@@ -84,6 +86,7 @@ class WorldConfig:
     detour_mu: float = math.log(0.45)
     detour_sigma: float = 0.35
     max_detour: float = 3.0
+    cross_network_ms: tuple[float, float] = (0.3, 1.2)
     tiv_fraction: float = 0.05
     tiv_inflation: tuple[float, float] = (1.5, 3.0)
     jitter_mean_ms: float = 0.3
@@ -138,7 +141,11 @@ class World:
         a, b = pair(a, b)  # canonical order -> bit-exact symmetry
         la, lb = self.true_location[a], self.true_location[b]
         prop = min_rtt_ms(la.distance_km(lb)) * self.detour(a, b) * self.tiv_inflation(a, b)
-        return prop + self.access_ms[a] + self.access_ms[b]
+        hop = 0.0
+        if la.asn != lb.asn:
+            lo, hi = self.config.cross_network_ms
+            hop = lo + (hi - lo) * self._u(a, b, "ixp")
+        return prop + hop + self.access_ms[a] + self.access_ms[b]
 
     def sample_rtt(self, a: NodeId, b: NodeId, rng: random.Random) -> float:
         c = self.config
