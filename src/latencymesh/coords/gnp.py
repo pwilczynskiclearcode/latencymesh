@@ -135,26 +135,50 @@ class GNP:
     # -- step 2: hosts -----------------------------------------------------------
     def position(self, rtt_to_landmarks: Mapping[NodeId, float]) -> Coordinate:
         """Solve for a host coordinate from RTTs to (a subset of) the landmarks."""
-        known = [(lid, v) for lid, v in rtt_to_landmarks.items() if lid in self.landmarks]
+        known = {lid: v for lid, v in rtt_to_landmarks.items() if lid in self.landmarks}
         if len(known) < self.dims + 1:
             raise ValueError(f"need at least {self.dims + 1} landmark RTTs, got {len(known)}")
-        lpos = np.array([self.landmarks[lid].vec for lid, _ in known])
-        lh = np.array([self.landmarks[lid].height for lid, _ in known])
-        meas = np.array([v for _, v in known])
-        # start from the closest landmark: good basin of attraction
-        x = np.append(lpos[int(np.argmin(meas))] + 1e-3, 0.0)
-
-        def grad(x: Vector) -> Vector:
-            diff = x[:-1] - lpos
-            eucl = np.linalg.norm(diff, axis=1)
-            pred = eucl + lh + (x[-1] if self.use_height else 0.0)
-            coef = 2 * (pred - meas) / meas**2
-            gp = (coef[:, None] * diff / np.maximum(eucl, 1e-9)[:, None]).sum(0)
-            gh = coef.sum() if self.use_height else 0.0
-            return np.append(gp, gh)
-
-        x = _adam(x, grad, self.steps // 4, self.lr * 2, _nonneg_last)
-        return Coordinate(x[:-1], max(0.0, float(x[-1])) if self.use_height else 0.0)
+        return fit_position(
+            [self.landmarks[k] for k in known],
+            list(known.values()),
+            use_height=self.use_height,
+            steps=self.steps // 4,
+            lr=self.lr * 2,
+        )
 
     def predict(self, a: Coordinate, b: Coordinate) -> float:
         return a.distance(b)
+
+
+def fit_position(
+    refs: Sequence[Coordinate],
+    rtts: Sequence[float],
+    *,
+    use_height: bool = True,
+    steps: int = 1000,
+    lr: float = 0.4,
+) -> Coordinate:
+    """Coordinate that best explains ``rtts`` to reference coordinates (relative error).
+
+    Works with any references - landmarks, or already-positioned nodes probed during a
+    join - as long as there are more of them than dimensions.
+    """
+    if len(refs) != len(rtts) or not refs:
+        raise ValueError("need one RTT per reference coordinate")
+    lpos = np.array([r.vec for r in refs])
+    lh = np.array([r.height for r in refs])
+    meas = np.maximum(np.array(rtts, dtype=float), 1e-3)
+    # start next to the closest reference: good basin of attraction
+    x0 = np.append(lpos[int(np.argmin(meas))] + 1e-3, 0.0)
+
+    def grad(x: Vector) -> Vector:
+        diff = x[:-1] - lpos
+        eucl = np.linalg.norm(diff, axis=1)
+        pred = eucl + lh + (x[-1] if use_height else 0.0)
+        coef = 2 * (pred - meas) / meas**2
+        gp = (coef[:, None] * diff / np.maximum(eucl, 1e-9)[:, None]).sum(0)
+        gh = coef.sum() if use_height else 0.0
+        return np.append(gp, gh)
+
+    x = _adam(x0, grad, steps, lr, _nonneg_last)
+    return Coordinate(x[:-1], float(x[-1]) if use_height else 0.0)

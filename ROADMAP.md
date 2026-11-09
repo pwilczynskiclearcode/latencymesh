@@ -6,7 +6,7 @@
 - [x] Synthetic latency world (fibre speed, routing detours, access delay, jitter, triangle-inequality violations)
 - [x] Discrete-event simulator with continuous re-probing under a probe budget
 - [x] Network coordinates: GNP, Vivaldi
-- [ ] Selection strategies: uniform, balanced (power of two), dispersed (Hilbert systematic, farthest point),
+- [x] Selection strategies: uniform, balanced (power of two), dispersed (Hilbert systematic, farthest point),
       around a node, k nearest, iterative nearest-neighbour search
 - [ ] Hierarchical clustering (datacenter / city / country / continent), CBG geolocation
 - [ ] EVM layer: titanoboa harness, node registry with commit-reveal measurements, token audit kit
