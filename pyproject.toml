@@ -19,7 +19,7 @@ classifiers = [
 
 [project.optional-dependencies]
 evm = ["titanoboa>=0.2.6"]
-dev = ["pytest>=8", "hypothesis>=6", "ruff>=0.6", "mypy>=1.10", "titanoboa>=0.2.6"]
+dev = ["pytest>=8", "pytest-cov>=5", "hypothesis>=6", "ruff>=0.6", "mypy>=1.10", "titanoboa>=0.2.6"]
 
 [build-system]
 requires = ["hatchling>=1.26"]
@@ -30,8 +30,17 @@ packages = ["src/latencymesh"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-v --cov=latencymesh --cov-branch --cov-report=term-missing"
 markers = ["evm: tests that run contracts in the titanoboa EVM"]
+
+[tool.coverage.run]
+source = ["latencymesh"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]
 
 [tool.ruff]
 line-length = 100
