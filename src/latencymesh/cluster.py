@@ -174,3 +174,20 @@ def pair_score(
             fp += pred and not real
             fn += real and not pred
     return PairScore(tp / (tp + fp) if tp + fp else 1.0, tp / (tp + fn) if tp + fn else 1.0)
+
+
+def regions_from_rtt(
+    nodes: Sequence[NodeId], dist: Distance, max_rtt_ms: float = 25.0
+) -> dict[NodeId, int]:
+    """Partition nodes into regions using measured RTT only (one average-linkage cut).
+
+    Region ids are contiguous and numbered in order of first appearance in ``nodes``,
+    which is what :mod:`latencymesh.evm` registers on-chain for the genesis.
+    """
+    c = cluster_hierarchy(nodes, dist, [Level("region", max_rtt_ms)])
+    remap: dict[int, int] = {}
+    out: dict[NodeId, int] = {}
+    for n in nodes:
+        raw = c.labels["region"][n]
+        out[n] = remap.setdefault(raw, len(remap))
+    return out

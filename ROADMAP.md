@@ -11,6 +11,19 @@
 - [x] Hierarchical clustering (datacenter / city / country / continent), CBG geolocation
 - [x] EVM layer: titanoboa harness, node registry with commit-reveal measurements, token audit kit
 
+## 0.1.x – on-chain witness selection
+- [x] Regions from genesis RTT; newcomers inherit their anchor's region
+- [x] Contract draws witnesses from distinct regions with beacon randomness, size^α weighting
+      and power-of-two balancing; only drawn witnesses may measure the newcomer
+- [x] Two-sided commit-reveal, permissionless finalisation, accordance record, penalties
+      proportional to the newcomer's stake (genesis never penalised)
+- [ ] Beacon adapters: drand (BLS signature check) and a VRF oracle
+- [ ] Gas: `assign_witnesses` costs ~0.6 M gas for 8 witnesses over 20 regions; cache region
+      weights, cap scanned regions
+- [ ] Re-measurement rounds for active nodes (regions and accordance drift over time)
+- [ ] Operator-independence heuristics: shared-backbone affinity from RTT residuals
+      (needs a synthetic world with cloud backbones first)
+
 ## 0.2 – adversaries
 - [ ] ERC-20 audit kit: stateful property testing (Hypothesis) of balance/supply invariants,
       ERC-4626 / ERC-721 suites, gas reports

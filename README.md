@@ -52,17 +52,45 @@ sim.run(3600)  # one simulated hour
 print(viv.predict("n00120", "n00377"), world.base_rtt("n00120", "n00377"))
 ```
 
-[`examples/join_attacks.py`](examples/join_attacks.py) runs the full join protocol on the EVM:
-witnesses chosen with beacon randomness, commit-reveal of both sides' RTTs, consistency and
-location checks. It rejects a node lying about RTTs, a node claiming a false location, and a node
-that adds delay to look like it is on another continent:
+### Geographically diverse witnesses, drawn by the contract
+
+`NodeRegistry.vy` selects witnesses on-chain, from public randomness the newcomer cannot
+influence, using measured RTT as the only input:
+
+1. **Regions** – the genesis is split into regions by clustering its RTT matrix
+   (`cluster.regions_from_rtt`). A joining node names its nearest genesis node as *anchor* and
+   inherits its region; the contract checks that the anchor really is at least as close as
+   every witness.
+2. **Draw** – witnesses come from *distinct* regions (weighted by `size^α`: per-region fair,
+   √size, or per-node fair). Inside a region the less frequently selected of two random
+   members is taken (power of two choices), so selection counts stay even over unlimited draws.
+3. **Both directions** – newcomer and witnesses measure each other, commit, then reveal.
+   Neither side has to trust the other.
+4. **Accordance** – pairs agree when `|a − b| ≤ max(abs, rel·min)`. A quorum admits the
+   newcomer. Genesis nodes are always right. Any other node that stays silent, or reports a
+   discrepancy the majority did not see, loses a share of its stake proportional to the
+   newcomer's stake. Each node's record of agreement is kept on-chain (`accordance_bps`).
+
+On a 72-node synthetic world, 45 % of plain random 8-witness sets contain two witnesses closer
+than 300 km to each other; none of the contract's draws do (median closest pair 2 057 km vs
+328 km). Flooding one region with 20 extra nodes does not get more than one of them into any
+draw.
+
+[`examples/join_attacks.py`](examples/join_attacks.py) runs the full join protocol:
 
 ```
-honest       ADMITTED  all checks passed
-rtt-liar     REJECTED  only 0/12 witnesses agree
-fake-tokyo   REJECTED  claimed location inconsistent with witness RTTs
-delay-tokyo  REJECTED  claimed location inconsistent with witness RTTs
+honest       ADMITTED  region 0
+             witnesses: Ashburn, Bogota, Dallas, Dubai, Jakarta, Milan, Sao Paulo, Seattle
+rtt-liar     REJECTED  penalised: rtt-liar 0.10 ETH
+fake-tokyo   VETOED    claimed location contradicts witness RTTs
+delay-tokyo  VETOED    claimed location contradicts witness RTTs
 ```
+
+What RTT can and cannot prove: a small RTT proves proximity; a large RTT proves nothing,
+because delay can always be added. Distance between witnesses is therefore established through
+their anchors (small, two-sided RTTs to genesis nodes), not through RTTs between the witnesses
+themselves. Independence of operators (e.g. several nodes of one cloud provider in different
+regions) cannot be proven from RTT; see the roadmap.
 
 ### Modules
 
@@ -74,7 +102,7 @@ delay-tokyo  REJECTED  claimed location inconsistent with witness RTTs
 | `coords` | GNP and Vivaldi network coordinates |
 | `select` | uniform, balanced, Hilbert-systematic, dispersed, around, k-nearest, iterative nearest, swap-or-not |
 | `cluster`, `geoloc` | datacenter/city/country/continent clustering, CBG geolocation and claim verification |
-| `evm` | titanoboa harness, `NodeRegistry.vy` (genesis, stake, commit-reveal, slashing), join protocol, ERC-20 audit kit |
+| `evm` | titanoboa harness, `NodeRegistry.vy` (regions, diverse witness draws, commit-reveal, accordance and penalties), `MockBeacon.vy`, join protocol, ERC-20 audit kit |
 
 ### Auditing token contracts
 

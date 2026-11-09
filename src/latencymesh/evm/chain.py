@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -11,12 +11,15 @@ from typing import Any
 
 import boa
 
+from ..cluster import regions_from_rtt
 from ..genesis import Genesis
 from ..model import Location, Measurement, Node, NodeId
 from . import CONTRACTS_DIR
 
 ETHER = 10**18
 STATUS_TRUSTED, STATUS_PENDING, STATUS_ACTIVE, STATUS_REJECTED = 1, 2, 4, 8
+WEIGHT_REGION_UNIFORM, WEIGHT_SQRT, WEIGHT_NODE_UNIFORM = 0, 1, 2
+ZERO_ADDRESS = "0x" + "00" * 20
 
 
 def load_contract(name_or_path: str | Path, *args: Any, **kwargs: Any) -> Any:
@@ -45,7 +48,8 @@ class MeshChain:
     """A NodeRegistry deployment plus a stable NodeId → account mapping.
 
     Every node gets its own funded account, so contract calls are made *as* that node
-    (``boa.env.prank``), exactly like independent operators would.
+    (``boa.env.prank``), exactly like independent operators would. A ``MockBeacon``
+    provides randomness; :meth:`publish_randomness` plays the role of the beacon network.
     """
 
     min_stake: int = ETHER
@@ -55,22 +59,22 @@ class MeshChain:
 
     def __post_init__(self) -> None:
         self.owner = boa.env.eoa
-        self.registry = load_contract("NodeRegistry", self.min_stake)
+        self.beacon = load_contract("MockBeacon")
+        self.registry = load_contract("NodeRegistry", self.beacon.address, self.min_stake)
+        self._by_address: dict[str, NodeId] = {}
 
     # -- accounts --------------------------------------------------------------
     def address(self, node_id: NodeId) -> str:
         a = self.accounts.get(node_id)
         if a is None:
-            a = boa.env.generate_address(alias=node_id)
+            a = str(boa.env.generate_address(alias=node_id))
             boa.env.set_balance(a, self.funding)
             self.accounts[node_id] = a
+            self._by_address[a.lower()] = node_id
         return a
 
-    def node_of(self, address: str) -> NodeId:
-        for nid, a in self.accounts.items():
-            if a == address:
-                return nid
-        raise KeyError(address)
+    def node_of(self, address: Any) -> NodeId:
+        return self._by_address[str(address).lower()]
 
     @contextmanager
     def as_node(self, node_id: NodeId) -> Iterator[str]:
@@ -78,39 +82,85 @@ class MeshChain:
         with boa.env.prank(a):
             yield a
 
+    # -- configuration -----------------------------------------------------------
+    def set_params(self, **changes: int) -> None:
+        self.registry.set_params(tuple(self.registry.params()._replace(**changes)))
+
     # -- registry --------------------------------------------------------------
-    def register_genesis(self, genesis: Genesis, seal: bool = True) -> None:
-        for n in genesis.nodes:
-            loc = _require_location(n)
+    def register_genesis(
+        self,
+        genesis: Genesis,
+        regions: Mapping[NodeId, int] | None = None,
+        region_rtt_ms: float = 25.0,
+        seal: bool = True,
+    ) -> dict[NodeId, int]:
+        """Register trusted nodes; regions default to an RTT-only clustering of the genesis."""
+        ids = [n.id for n in genesis.nodes]
+        if regions is None:
+            graph = genesis.to_graph()
+            regions = regions_from_rtt(ids, graph.rtt, region_rtt_ms)
+        for n in sorted(genesis.nodes, key=lambda n: (regions[n.id], ids.index(n.id))):
+            loc = n.location or Location(0.0, 0.0)
             self.registry.register_genesis(
-                self.address(n.id), encode_coord(loc.lat), encode_coord(loc.lon), loc.asn or 0
+                self.address(n.id),
+                regions[n.id],
+                encode_coord(loc.lat),
+                encode_coord(loc.lon),
+                loc.asn or 0,
             )
         if seal:
             self.registry.seal_genesis()
+        return dict(regions)
 
-    def join(self, node: Node, stake: int | None = None) -> None:
-        loc = _require_location(node)
+    def join(self, node: Node, anchor: NodeId, stake: int | None = None) -> int:
+        loc = node.location or Location(0.0, 0.0)
         with self.as_node(node.id):
-            self.registry.join(
+            rid = self.registry.join(
+                self.address(anchor),
                 encode_coord(loc.lat),
                 encode_coord(loc.lon),
                 loc.asn or 0,
                 value=self.min_stake if stake is None else stake,
             )
+        return int(rid)
+
+    def info(self, node_id: NodeId) -> Any:
+        return self.registry.nodes(self.address(node_id))
 
     def status(self, node_id: NodeId) -> int:
-        return int(self.registry.nodes(self.address(node_id)).status)
+        return int(self.info(node_id).status)
 
     def stake(self, node_id: NodeId) -> int:
-        return int(self.registry.nodes(self.address(node_id)).stake)
+        return int(self.info(node_id).stake)
 
-    def set_status(self, node_id: NodeId, status: int) -> None:
-        self.registry.set_status(self.address(node_id), status)
+    def region(self, node_id: NodeId) -> int:
+        return int(self.info(node_id).region)
+
+    def accordance(self, node_id: NodeId) -> float:
+        return int(self.registry.accordance_bps(self.address(node_id))) / 10_000
+
+    # -- randomness and witnesses -------------------------------------------------
+    def publish_randomness(self) -> int:
+        """Publish the next beacon round (deterministic from ``seed`` for reproducibility)."""
+        r = int(self.beacon.latest_round()) + 1
+        value = hashlib.sha256(f"beacon|{self.seed}|{r}".encode()).digest()
+        self.beacon.publish(r, value)
+        return r
+
+    def assign_witnesses(self, round_id: int) -> list[NodeId]:
+        ws = self.registry.assign_witnesses(round_id)
+        return [self.node_of(w) for w in ws]
+
+    def preview_witnesses(
+        self, seed: bytes, k: int, exclude: Sequence[NodeId] = ()
+    ) -> list[NodeId]:
+        ws = self.registry.preview_witnesses(seed, k, [self.address(e) for e in exclude])
+        return [self.node_of(w) for w in ws]
+
+    def round_info(self, round_id: int) -> Any:
+        return self.registry.round_info(round_id)
 
     # -- commit-reveal -----------------------------------------------------------
-    def open_round(self, commit_blocks: int = 10, reveal_blocks: int = 10) -> int:
-        return int(self.registry.open_round(commit_blocks, reveal_blocks))
-
     def salt(self, round_id: int, observer: NodeId, target: NodeId) -> bytes:
         """Deterministic per-measurement salt (a real node would use fresh randomness)."""
         return hashlib.sha256(f"{self.seed}|{round_id}|{observer}|{target}".encode()).digest()
@@ -146,11 +196,21 @@ class MeshChain:
             return None
         return decode_rtt(int(self.registry.revealed_rtt(round_id, o, t)))
 
+    def finalize(self, round_id: int) -> tuple[bool, dict[NodeId, int]]:
+        """Finalise a round; returns (admitted, penalties taken per node)."""
+        admitted = bool(self.registry.finalize(round_id))
+        penalties: dict[NodeId, int] = {}
+        for ev in self.registry.get_logs():
+            if type(ev).__name__ == "Penalised":
+                penalties[self.node_of(ev.node)] = int(ev.amount)
+        return admitted, penalties
+
+    # -- blocks --------------------------------------------------------------------
     def to_reveal_phase(self, round_id: int) -> None:
-        self.mine_until(int(self.registry.rounds(round_id).commit_end) + 1)
+        self.mine_until(int(self.round_info(round_id).commit_end) + 1)
 
     def to_round_end(self, round_id: int) -> None:
-        self.mine_until(int(self.registry.rounds(round_id).reveal_end) + 1)
+        self.mine_until(int(self.round_info(round_id).reveal_end) + 1)
 
     @staticmethod
     def mine(blocks: int = 1) -> None:
@@ -164,9 +224,3 @@ class MeshChain:
         n = block - self.block_number()
         if n > 0:
             self.mine(n)
-
-
-def _require_location(node: Node) -> Location:
-    if node.location is None:
-        raise ValueError(f"node {node.id!r} has no (claimed) location")
-    return node.location

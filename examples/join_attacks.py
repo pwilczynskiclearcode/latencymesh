@@ -1,5 +1,8 @@
 """End-to-end example: honest and malicious nodes try to join a latency-verified network.
 
+The contract draws geographically diverse witnesses from beacon randomness; the newcomer
+and the witnesses measure each other, commit, reveal, and the contract decides.
+
 Run with:  python examples/join_attacks.py
 """
 
@@ -11,7 +14,6 @@ from latencymesh.evm.chain import MeshChain
 from latencymesh.evm.protocol import run_join_round
 from latencymesh.geoloc import calibrate
 from latencymesh.model import Location
-from latencymesh.select import Beacon, dispersed, make_distance
 from latencymesh.sim import Simulation
 from latencymesh.synth import WorldConfig, generate_world
 
@@ -20,13 +22,13 @@ TOKYO = Location(35.68, 139.69, "JP", "Tokyo", asn=65002)
 
 
 def main() -> None:
-    world = generate_world(WorldConfig(n_nodes=60, n_trusted=40, seed=8))
+    world = generate_world(WorldConfig(n_nodes=72, n_trusted=72, seed=8))
     genesis = world.genesis()
     sim = Simulation(world=world, graph=genesis.to_graph(), seed=2)
     chain = MeshChain()
-    chain.register_genesis(genesis)
+    regions = chain.register_genesis(genesis)
     landmarks = calibrate(genesis)
-    beacon = Beacon(seed=2026)
+    print(f"genesis: {len(genesis.nodes)} trusted nodes in {len(set(regions.values()))} regions\n")
 
     scenarios = {
         "honest": (WARSAW, WARSAW, None, 0.0),
@@ -35,18 +37,21 @@ def main() -> None:
         "delay-tokyo": (WARSAW, TOKYO, None, 45.0),
     }
     for name, (true_loc, claimed, scale, delay) in scenarios.items():
-        node = world.add_node(name, true_loc, 0.3, claimed=claimed)
-        sim.join(name)
-        chain.join(node)
+        world.add_node(name, true_loc, 0.3, claimed=claimed)
         if scale is not None:
             sim.reporters[name] = lambda m, s=scale: dataclasses.replace(m, rtt_ms=m.rtt_ms * s)
         world.added_delay_ms[name] = delay
-        witnesses = dispersed(
-            world.trusted_ids(), 12, make_distance(graph=sim.graph), beacon.rng(name)
-        )
-        out = run_join_round(sim, chain, name, witnesses, landmarks=landmarks)
-        verdict = "ADMITTED" if out.accepted else "REJECTED"
-        print(f"{name:12s} {verdict:9s} {'; '.join(out.reasons) or 'all checks passed'}")
+        out = run_join_round(sim, chain, name, landmarks=landmarks)
+        cities = ", ".join(sorted({world.true_location[w].city or "?" for w in out.witnesses}))
+        if out.accepted:
+            verdict = f"ADMITTED  region {out.region}"
+        elif out.vetoed:
+            verdict = "VETOED    claimed location contradicts witness RTTs"
+        else:
+            lost = ", ".join(f"{n} {v / 1e18:.2f} ETH" for n, v in out.penalties.items() if v)
+            verdict = f"REJECTED  penalised: {lost}"
+        print(f"{name:12s} {verdict}")
+        print(f"{'':12s} witnesses: {cities}\n")
 
 
 if __name__ == "__main__":

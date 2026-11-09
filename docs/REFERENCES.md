@@ -25,6 +25,8 @@ you ship.
 | Swap-or-not shuffle | `select.swap_or_not_index` | V. T. Hoang, B. Morris, P. Rogaway, CRYPTO 2012; byte layout follows Ethereum consensus-specs `compute_shuffled_index` | own code following the spec's structure | Ethereum consensus-specs are released under CC0 1.0 |
 | Average-linkage clustering | `cluster` | UPGMA (Sokal & Michener 1958), Lance–Williams update | textbook method | public domain knowledge |
 | CBG geolocation | `geoloc` | B. Gueye, A. Ziviani, M. Crovella, S. Fdida, *Constraint-Based Geolocation of Internet Hosts*, IEEE/ACM ToN 2006 | idea from the paper; bestline fit via lower convex hull is our own | no known patent |
+| Region-stratified witness draw | `evm/contracts/NodeRegistry.vy` | stratified sampling (textbook) + power of two choices; the combination with anchor-inherited regions is the project's own | own method | n/a |
+| Randomness beacon interface | `evm/contracts/MockBeacon.vy` | generic round/value interface, compatible with drand-style beacons | own code | n/a |
 | Two-sided claim check | `geoloc.verify_claim` | the project's own, motivated by Gill et al., *Dude, where's my server?*, PAM 2010 | own method | n/a |
 | Inverse normal CDF | `synth` | Python standard library `statistics.NormalDist` | library call | PSF license, MIT-compatible |
 | ERC-20 behaviour | `evm.audit`, `Token.vy` | EIP-20 (F. Vogelsteller, V. Buterin) | checks are derived from the standard's text | EIPs are released under CC0 |

@@ -1,120 +1,123 @@
 """Reference join protocol, run end-to-end on the simulated network and the EVM.
 
-1. The newcomer stakes and registers its *claimed* location (``PENDING``).
-2. Witnesses are drawn with public randomness after the join (see :mod:`latencymesh.select`).
-3. Both sides of every (witness, newcomer) pair measure RTT and **commit** the hash.
-4. After the commit phase both sides **reveal**; nobody could copy or adapt to the other.
-5. Pairs are checked for agreement (relative *and* absolute tolerance), the witnesses'
-   RTTs are checked against the claimed location (:func:`latencymesh.geoloc.verify_claim`),
-   and the owner records ``ACTIVE`` or ``REJECTED``.
-6. Anyone can slash observers that committed but did not reveal.
+1. The newcomer finds its nearest **genesis** node off-chain (it probes a few trusted
+   nodes, :func:`latencymesh.select.iterative_nearest`) and names it as *anchor*.
+2. It stakes and joins; the registry fixes a *future* beacon round.
+3. Once the beacon publishes that round, anyone triggers the on-chain draw of
+   witnesses from distinct regions - the newcomer has no say in who measures it.
+4. Newcomer ↔ every witness and newcomer ↔ anchor are measured in both directions,
+   committed, then revealed.
+5. Optionally an off-chain location check (CBG) lets the owner veto a node whose
+   claimed coordinates contradict the witnesses' RTTs.
+6. Anyone finalises: the contract compares both sides of every pair, admits the
+   newcomer on a quorum, and penalises outvoted or silent non-genesis participants.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+import random
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 from ..geoloc import ClaimCheck, Landmark, verify_claim
 from ..model import Measurement, NodeId
+from ..select import iterative_nearest, make_distance
 from ..sim import Simulation
-from .chain import STATUS_ACTIVE, STATUS_REJECTED, MeshChain
-
-
-@dataclass(frozen=True, slots=True)
-class Tolerance:
-    """Two RTTs agree if they differ by at most ``max(abs_ms, rel · min(a, b))``."""
-
-    rel: float = 0.2
-    abs_ms: float = 1.5
-    #: share of witness pairs that must agree
-    quorum: float = 0.8
-
-    def agree(self, a: float, b: float) -> bool:
-        return abs(a - b) <= max(self.abs_ms, self.rel * min(a, b))
+from .chain import MeshChain
 
 
 @dataclass(slots=True)
 class JoinOutcome:
     newcomer: NodeId
     round_id: int
-    accepted: bool
+    anchor: NodeId
+    witnesses: list[NodeId]
+    accepted: bool = False
+    vetoed: bool = False
+    region: int | None = None
     agreeing: list[NodeId] = field(default_factory=list)
     disagreeing: list[NodeId] = field(default_factory=list)
-    missing: list[NodeId] = field(default_factory=list)
+    silent: list[NodeId] = field(default_factory=list)
+    penalties: dict[NodeId, int] = field(default_factory=dict)
     claim: ClaimCheck | None = None
-    slashed: list[NodeId] = field(default_factory=list)
-    reasons: list[str] = field(default_factory=list)
 
 
-Behaviour = Callable[[Measurement], Measurement | None]
+def find_anchor(sim: Simulation, newcomer: NodeId, trusted: Sequence[NodeId], seed: int) -> NodeId:
+    """The newcomer's own search for its nearest genesis node (off-chain, cheap)."""
+    rng = random.Random(seed)
+    res = iterative_nearest(
+        lambda c: sim.world.ping(newcomer, c, rng),
+        list(trusted),
+        make_distance(graph=sim.graph),
+        rng,
+        x=8,
+        t=1,
+    )
+    return res.nearest[0][0]
 
 
 def run_join_round(
     sim: Simulation,
     chain: MeshChain,
     newcomer: NodeId,
-    witnesses: Sequence[NodeId],
+    anchor: NodeId | None = None,
     landmarks: Mapping[NodeId, Landmark] | None = None,
-    tolerance: Tolerance | None = None,
     withhold_reveal: Sequence[NodeId] = (),
+    stake: int | None = None,
 ) -> JoinOutcome:
-    """Run one admission round; ``withhold_reveal`` lists observers that never reveal."""
-    tol = tolerance or Tolerance()
-    rid = chain.open_round()
-    pairs: list[tuple[Measurement, Measurement]] = []
-    for w in witnesses:
-        by_w, by_n = sim.measure(w, newcomer), sim.measure(newcomer, w)
-        if by_w is None or by_n is None:
-            continue
-        chain.commit(rid, by_w)
-        chain.commit(rid, by_n)
-        pairs.append((by_w, by_n))
+    """Run one admission round; ``withhold_reveal`` lists participants that never reveal."""
+    trusted = sim.world.trusted_ids()
+    anchor = anchor or find_anchor(sim, newcomer, trusted, chain.seed)
+    sim.join(newcomer)
+    rid = chain.join(sim.world.nodes[newcomer], anchor, stake)
+    chain.publish_randomness()
+    witnesses = chain.assign_witnesses(rid)
+    out = JoinOutcome(newcomer, rid, anchor, witnesses)
+
+    measured: list[Measurement] = []
+    for p in [*witnesses, anchor]:
+        for m in (sim.measure(p, newcomer), sim.measure(newcomer, p)):
+            if m is not None:
+                chain.commit(rid, m)
+                measured.append(m)
 
     chain.to_reveal_phase(rid)
-    for by_w, by_n in pairs:
-        for m in (by_w, by_n):
-            if m.observer not in withhold_reveal:
-                chain.reveal(rid, m)
+    for m in measured:
+        if m.observer not in withhold_reveal:
+            chain.reveal(rid, m)
 
-    out = JoinOutcome(newcomer, rid, accepted=False)
-    witness_rtts: dict[NodeId, float] = {}
-    for w in witnesses:
-        rw, rn = chain.revealed(rid, w, newcomer), chain.revealed(rid, newcomer, w)
-        if rw is None or rn is None:
-            out.missing.append(w)
-            continue
-        witness_rtts[w] = rw
-        (out.agreeing if tol.agree(rw, rn) else out.disagreeing).append(w)
-
-    decided = len(out.agreeing) + len(out.disagreeing)
-    if newcomer in withhold_reveal or decided == 0:
-        out.reasons.append("newcomer did not reveal")
-    elif len(out.agreeing) / decided < tol.quorum:
-        out.reasons.append(f"only {len(out.agreeing)}/{decided} witnesses agree")
-    if landmarks is not None:
-        claimed = sim.graph.node(newcomer).location
-        if claimed is None:
-            out.reasons.append("no claimed location")
+    for p in [*witnesses, anchor]:
+        by_p, by_n = chain.revealed(rid, p, newcomer), chain.revealed(rid, newcomer, p)
+        if by_p is None:
+            out.silent.append(p)
+        elif by_n is not None and _agree(chain, by_p, by_n):
+            out.agreeing.append(p)
         else:
-            out.claim = verify_claim(claimed, witness_rtts, landmarks)
+            out.disagreeing.append(p)
+
+    if landmarks is not None:
+        claimed = sim.world.nodes[newcomer].location
+        rtts = {
+            p: v
+            for p in [*witnesses, anchor]
+            if (v := chain.revealed(rid, p, newcomer)) is not None
+        }
+        if claimed is not None and rtts:
+            out.claim = verify_claim(claimed, rtts, landmarks)
             if not out.claim.ok:
-                out.reasons.append("claimed location inconsistent with witness RTTs")
-    out.accepted = not out.reasons
-    unrevealed = {
-        m.observer
-        for pair in pairs
-        for m in pair
-        if chain.revealed(rid, m.observer, m.target) is None
-    }
-    if unrevealed:  # slash before the status change can refund the newcomer's stake
-        chain.to_round_end(rid)
-        for by_w, by_n in pairs:
-            for m in (by_w, by_n):
-                if m.observer in unrevealed:
-                    chain.registry.slash_non_revealer(
-                        rid, chain.address(m.observer), chain.address(m.target)
-                    )
-        out.slashed = sorted(unrevealed)
-    chain.set_status(newcomer, STATUS_ACTIVE if out.accepted else STATUS_REJECTED)
+                chain.registry.veto(chain.address(newcomer))
+                out.vetoed = True
+                return out
+
+    chain.to_round_end(rid)
+    out.accepted, out.penalties = chain.finalize(rid)
+    if out.accepted:
+        out.region = chain.region(newcomer)
     return out
+
+
+def _agree(chain: MeshChain, a_ms: float, b_ms: float) -> bool:
+    """Same rule as NodeRegistry._agree, for reporting only (the contract decides)."""
+    p = chain.registry.params()
+    lo, diff = min(a_ms, b_ms), abs(a_ms - b_ms)
+    return bool(diff * 1000 <= max(p.tolerance_abs_us, lo * 1000 * p.tolerance_bps / 10_000))
