@@ -9,9 +9,11 @@
 - [x] Selection strategies: uniform, balanced (power of two), dispersed (Hilbert systematic, farthest point),
       around a node, k nearest, iterative nearest-neighbour search
 - [x] Hierarchical clustering (datacenter / city / country / continent), CBG geolocation
-- [ ] EVM layer: titanoboa harness, node registry with commit-reveal measurements, token audit kit
+- [x] EVM layer: titanoboa harness, node registry with commit-reveal measurements, token audit kit
 
 ## 0.2 – adversaries
+- [ ] ERC-20 audit kit: stateful property testing (Hypothesis) of balance/supply invariants,
+      ERC-4626 / ERC-721 suites, gas reports
 - [ ] Attack library: delay injection, selective delays, colluding witnesses, multi-site (proxied) nodes, Sybil regions
 - [ ] Detection: embedding residuals, speed-of-light violations, witness disagreement scoring
 - [ ] Scenario DSL + reports (precision/recall of detection, location error)

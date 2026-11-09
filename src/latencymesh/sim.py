@@ -140,9 +140,11 @@ class Simulation:
     def __post_init__(self) -> None:
         self.rng = random.Random(self.seed)
         self._listeners: list[Listener] = []
-        for nid in self.world.nodes:
-            if nid not in self.graph:
-                raise ValueError(f"graph is missing world node {nid!r}")
+        # the graph may be a subset of the world (nodes that have not joined yet),
+        # but every node the network knows must exist in the ground truth
+        for nid in self.graph.node_ids:
+            if nid not in self.world.nodes:
+                raise ValueError(f"graph node {nid!r} does not exist in the world")
 
     @classmethod
     def from_genesis(cls, world: World, *, include_all: bool = True, **kw: object) -> Simulation:
