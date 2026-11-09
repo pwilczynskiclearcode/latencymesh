@@ -3,7 +3,7 @@
 ## 0.1 – foundations
 - [x] Project skeleton, CI, lint, typing
 - [x] Node / measurement model, sparse RTT graph, genesis file format
-- [ ] Synthetic latency world (fibre speed, routing detours, access delay, jitter, triangle-inequality violations)
+- [x] Synthetic latency world (fibre speed, routing detours, access delay, jitter, triangle-inequality violations)
 - [ ] Discrete-event simulator with continuous re-probing under a probe budget
 - [ ] Network coordinates: GNP, Vivaldi
 - [ ] Selection strategies: uniform, balanced (power of two), dispersed (Hilbert systematic, farthest point),
