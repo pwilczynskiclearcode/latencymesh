@@ -5,7 +5,7 @@
 - [x] Node / measurement model, sparse RTT graph, genesis file format
 - [x] Synthetic latency world (fibre speed, routing detours, access delay, jitter, triangle-inequality violations)
 - [x] Discrete-event simulator with continuous re-probing under a probe budget
-- [ ] Network coordinates: GNP, Vivaldi
+- [x] Network coordinates: GNP, Vivaldi
 - [ ] Selection strategies: uniform, balanced (power of two), dispersed (Hilbert systematic, farthest point),
       around a node, k nearest, iterative nearest-neighbour search
 - [ ] Hierarchical clustering (datacenter / city / country / continent), CBG geolocation
