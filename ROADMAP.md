@@ -2,7 +2,7 @@
 
 ## 0.1 – foundations
 - [x] Project skeleton, CI, lint, typing
-- [ ] Node / measurement model, sparse RTT graph, genesis file format
+- [x] Node / measurement model, sparse RTT graph, genesis file format
 - [ ] Synthetic latency world (fibre speed, routing detours, access delay, jitter, triangle-inequality violations)
 - [ ] Discrete-event simulator with continuous re-probing under a probe budget
 - [ ] Network coordinates: GNP, Vivaldi
