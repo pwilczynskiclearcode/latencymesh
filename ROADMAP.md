@@ -7,11 +7,21 @@
       links, lines checked against an independent definition, distinct witnesses, edge cases
       (tight cluster, smallest network), distribution of picks
 
+## Decided, to be built next
+- **Lines are defined by RTT rank from the target**, not by links of links: line 1 = the
+  target's nearest nodes 1-3, line 2 = ranks 4-12, line 3 = ranks 13-39. This replaces the
+  current definition, under which tight clusters (Sydney x3 + Melbourne) point only at each
+  other: 20 of 68 milky-way targets have no line 2 and 35 have no line 3, so those witnesses
+  silently become global ones.
+- **The RTT graph lives off-chain; the contract keeps only its Merkle root.** A witness draw
+  is checked against a proof instead of contract storage.
+- **Off-chain, the graph is plain in-memory Python** - no database at this stage. Measured for
+  1000 nodes (full 1000 x 1000 RTT matrix as lists of ints): 57 MB, built in about 2 s, every
+  node's neighbours ranked in 0.7 s. With one Merkle leaf per node (its 39 nearest in rank
+  order) the tree has 1000 leaves and depth 10: built in 0.15 s, a proof is 320 bytes plus an
+  80 byte leaf. One leaf per pair would be 999 000 leaves and 55 s to build - not needed.
+
 ## Open design questions (found by simulation on milky-way)
-- **Lines are often empty.** With 3 nearest nodes per node, clusters such as Sydney x3 +
-  Melbourne point only at each other: 20 of 68 targets have no line 2 and 35 have no line 3,
-  so those witnesses silently become global ones. Options: define lines by RTT *rank* from the
-  target (nearest 1-3, 4-12, 13-39), or store more neighbours per node.
 - **Work is uneven.** If every node is a target once per cycle, a node does 1.8 to 7.7 jobs
   per cycle (mean 4). Nodes that nobody lists as a nearest node only get global work (~1.9).
   Decide whether rewards should be per job, or weighted so that remote nodes stay worthwhile.
