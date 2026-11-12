@@ -1,0 +1,87 @@
+# milky-way genesis: the trusted starting set of nodes.
+#
+# One node per public cloud region of the three largest providers. Every entry is a
+# region where a small (free or lowest-tier) virtual machine can be rented today, so
+# this genesis can be deployed for real.
+#
+# `city` is the metro area the provider publishes for the region; lat/lon are the
+# coordinates of that city, not of a datacenter.
+#
+# Not included yet (see ROADMAP.md): the remaining cloud regions, a node in every
+# country, and edge networks such as Cloudflare where the location of a workload
+# cannot be pinned to one place.
+name: milky-way
+nodes:
+  # --- Amazon Web Services -------------------------------------------------------
+  - {id: aws-us-east-1,      provider: aws, region: us-east-1,      city: Ashburn,       country: US, lat: 39.04,  lon: -77.49}
+  - {id: aws-us-east-2,      provider: aws, region: us-east-2,      city: Columbus,      country: US, lat: 39.96,  lon: -83.00}
+  - {id: aws-us-west-1,      provider: aws, region: us-west-1,      city: San Jose,      country: US, lat: 37.34,  lon: -121.89}
+  - {id: aws-us-west-2,      provider: aws, region: us-west-2,      city: Boardman,      country: US, lat: 45.84,  lon: -119.70}
+  - {id: aws-ca-central-1,   provider: aws, region: ca-central-1,   city: Montreal,      country: CA, lat: 45.50,  lon: -73.57}
+  - {id: aws-ca-west-1,      provider: aws, region: ca-west-1,      city: Calgary,       country: CA, lat: 51.05,  lon: -114.07}
+  - {id: aws-mx-central-1,   provider: aws, region: mx-central-1,   city: Queretaro,     country: MX, lat: 20.59,  lon: -100.39}
+  - {id: aws-sa-east-1,      provider: aws, region: sa-east-1,      city: Sao Paulo,     country: BR, lat: -23.55, lon: -46.63}
+  - {id: aws-eu-west-1,      provider: aws, region: eu-west-1,      city: Dublin,        country: IE, lat: 53.35,  lon: -6.26}
+  - {id: aws-eu-west-2,      provider: aws, region: eu-west-2,      city: London,        country: GB, lat: 51.51,  lon: -0.13}
+  - {id: aws-eu-west-3,      provider: aws, region: eu-west-3,      city: Paris,         country: FR, lat: 48.86,  lon: 2.35}
+  - {id: aws-eu-central-1,   provider: aws, region: eu-central-1,   city: Frankfurt,     country: DE, lat: 50.11,  lon: 8.68}
+  - {id: aws-eu-central-2,   provider: aws, region: eu-central-2,   city: Zurich,        country: CH, lat: 47.38,  lon: 8.54}
+  - {id: aws-eu-north-1,     provider: aws, region: eu-north-1,     city: Stockholm,     country: SE, lat: 59.33,  lon: 18.07}
+  - {id: aws-eu-south-1,     provider: aws, region: eu-south-1,     city: Milan,         country: IT, lat: 45.46,  lon: 9.19}
+  - {id: aws-eu-south-2,     provider: aws, region: eu-south-2,     city: Zaragoza,      country: ES, lat: 41.65,  lon: -0.89}
+  - {id: aws-il-central-1,   provider: aws, region: il-central-1,   city: Tel Aviv,      country: IL, lat: 32.09,  lon: 34.78}
+  - {id: aws-me-south-1,     provider: aws, region: me-south-1,     city: Manama,        country: BH, lat: 26.23,  lon: 50.59}
+  - {id: aws-me-central-1,   provider: aws, region: me-central-1,   city: Dubai,         country: AE, lat: 25.20,  lon: 55.27}
+  - {id: aws-af-south-1,     provider: aws, region: af-south-1,     city: Cape Town,     country: ZA, lat: -33.92, lon: 18.42}
+  - {id: aws-ap-south-1,     provider: aws, region: ap-south-1,     city: Mumbai,        country: IN, lat: 19.08,  lon: 72.88}
+  - {id: aws-ap-south-2,     provider: aws, region: ap-south-2,     city: Hyderabad,     country: IN, lat: 17.39,  lon: 78.49}
+  - {id: aws-ap-southeast-1, provider: aws, region: ap-southeast-1, city: Singapore,     country: SG, lat: 1.35,   lon: 103.82}
+  - {id: aws-ap-southeast-2, provider: aws, region: ap-southeast-2, city: Sydney,        country: AU, lat: -33.87, lon: 151.21}
+  - {id: aws-ap-southeast-3, provider: aws, region: ap-southeast-3, city: Jakarta,       country: ID, lat: -6.21,  lon: 106.85}
+  - {id: aws-ap-southeast-4, provider: aws, region: ap-southeast-4, city: Melbourne,     country: AU, lat: -37.81, lon: 144.96}
+  - {id: aws-ap-southeast-5, provider: aws, region: ap-southeast-5, city: Kuala Lumpur,  country: MY, lat: 3.14,   lon: 101.69}
+  - {id: aws-ap-southeast-7, provider: aws, region: ap-southeast-7, city: Bangkok,       country: TH, lat: 13.76,  lon: 100.50}
+  - {id: aws-ap-east-1,      provider: aws, region: ap-east-1,      city: Hong Kong,     country: HK, lat: 22.32,  lon: 114.17}
+  - {id: aws-ap-east-2,      provider: aws, region: ap-east-2,      city: Taipei,        country: TW, lat: 25.03,  lon: 121.57}
+  - {id: aws-ap-northeast-1, provider: aws, region: ap-northeast-1, city: Tokyo,         country: JP, lat: 35.68,  lon: 139.69}
+  - {id: aws-ap-northeast-2, provider: aws, region: ap-northeast-2, city: Seoul,         country: KR, lat: 37.57,  lon: 126.98}
+  - {id: aws-ap-northeast-3, provider: aws, region: ap-northeast-3, city: Osaka,         country: JP, lat: 34.69,  lon: 135.50}
+
+  # --- Google Cloud ----------------------------------------------------------------
+  - {id: gcp-us-central1,          provider: gcp, region: us-central1,          city: Council Bluffs, country: US, lat: 41.26,  lon: -95.86}
+  - {id: gcp-us-east1,             provider: gcp, region: us-east1,             city: Moncks Corner,  country: US, lat: 33.20,  lon: -80.01}
+  - {id: gcp-us-east4,             provider: gcp, region: us-east4,             city: Ashburn,        country: US, lat: 39.04,  lon: -77.49}
+  - {id: gcp-us-west1,             provider: gcp, region: us-west1,             city: The Dalles,     country: US, lat: 45.60,  lon: -121.18}
+  - {id: gcp-us-west2,             provider: gcp, region: us-west2,             city: Los Angeles,    country: US, lat: 34.05,  lon: -118.24}
+  - {id: gcp-southamerica-east1,   provider: gcp, region: southamerica-east1,   city: Sao Paulo,      country: BR, lat: -23.55, lon: -46.63}
+  - {id: gcp-europe-west1,         provider: gcp, region: europe-west1,         city: Saint-Ghislain, country: BE, lat: 50.45,  lon: 3.82}
+  - {id: gcp-europe-west2,         provider: gcp, region: europe-west2,         city: London,         country: GB, lat: 51.51,  lon: -0.13}
+  - {id: gcp-europe-west3,         provider: gcp, region: europe-west3,         city: Frankfurt,      country: DE, lat: 50.11,  lon: 8.68}
+  - {id: gcp-europe-west4,         provider: gcp, region: europe-west4,         city: Eemshaven,      country: NL, lat: 53.44,  lon: 6.83}
+  - {id: gcp-europe-central2,      provider: gcp, region: europe-central2,      city: Warsaw,         country: PL, lat: 52.23,  lon: 21.01}
+  - {id: gcp-europe-north1,        provider: gcp, region: europe-north1,        city: Hamina,         country: FI, lat: 60.57,  lon: 27.20}
+  - {id: gcp-me-west1,             provider: gcp, region: me-west1,             city: Tel Aviv,       country: IL, lat: 32.09,  lon: 34.78}
+  - {id: gcp-africa-south1,        provider: gcp, region: africa-south1,        city: Johannesburg,   country: ZA, lat: -26.20, lon: 28.05}
+  - {id: gcp-asia-south1,          provider: gcp, region: asia-south1,          city: Mumbai,         country: IN, lat: 19.08,  lon: 72.88}
+  - {id: gcp-asia-southeast1,      provider: gcp, region: asia-southeast1,      city: Singapore,      country: SG, lat: 1.35,   lon: 103.82}
+  - {id: gcp-asia-east1,           provider: gcp, region: asia-east1,           city: Changhua,       country: TW, lat: 24.08,  lon: 120.54}
+  - {id: gcp-asia-northeast1,      provider: gcp, region: asia-northeast1,      city: Tokyo,          country: JP, lat: 35.68,  lon: 139.69}
+  - {id: gcp-australia-southeast1, provider: gcp, region: australia-southeast1, city: Sydney,         country: AU, lat: -33.87, lon: 151.21}
+
+  # --- Microsoft Azure -------------------------------------------------------------
+  - {id: azure-eastus,             provider: azure, region: eastus,             city: Boydton,      country: US, lat: 36.67,  lon: -78.39}
+  - {id: azure-westus2,            provider: azure, region: westus2,            city: Quincy,       country: US, lat: 47.23,  lon: -119.85}
+  - {id: azure-brazilsouth,        provider: azure, region: brazilsouth,        city: Sao Paulo,    country: BR, lat: -23.55, lon: -46.63}
+  - {id: azure-northeurope,        provider: azure, region: northeurope,        city: Dublin,       country: IE, lat: 53.35,  lon: -6.26}
+  - {id: azure-westeurope,         provider: azure, region: westeurope,         city: Amsterdam,    country: NL, lat: 52.37,  lon: 4.90}
+  - {id: azure-uksouth,            provider: azure, region: uksouth,            city: London,       country: GB, lat: 51.51,  lon: -0.13}
+  - {id: azure-francecentral,      provider: azure, region: francecentral,      city: Paris,        country: FR, lat: 48.86,  lon: 2.35}
+  - {id: azure-germanywestcentral, provider: azure, region: germanywestcentral, city: Frankfurt,    country: DE, lat: 50.11,  lon: 8.68}
+  - {id: azure-polandcentral,      provider: azure, region: polandcentral,      city: Warsaw,       country: PL, lat: 52.23,  lon: 21.01}
+  - {id: azure-swedencentral,      provider: azure, region: swedencentral,      city: Gavle,        country: SE, lat: 60.67,  lon: 17.14}
+  - {id: azure-uaenorth,           provider: azure, region: uaenorth,           city: Dubai,        country: AE, lat: 25.20,  lon: 55.27}
+  - {id: azure-southafricanorth,   provider: azure, region: southafricanorth,   city: Johannesburg, country: ZA, lat: -26.20, lon: 28.05}
+  - {id: azure-centralindia,       provider: azure, region: centralindia,       city: Pune,         country: IN, lat: 18.52,  lon: 73.86}
+  - {id: azure-southeastasia,      provider: azure, region: southeastasia,      city: Singapore,    country: SG, lat: 1.35,   lon: 103.82}
+  - {id: azure-japaneast,          provider: azure, region: japaneast,          city: Tokyo,        country: JP, lat: 35.68,  lon: 139.69}
+  - {id: azure-australiaeast,      provider: azure, region: australiaeast,      city: Sydney,       country: AU, lat: -33.87, lon: 151.21}
