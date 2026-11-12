@@ -1,16 +1,12 @@
-"""latencymesh: simulate RTT-distance graphs and proximity-aware node selection.
+"""latencymesh: Vyper contracts for a witness network, and tools to simulate it.
 
-The package is organised in layers, each usable on its own:
-
-* ``model`` / ``graph`` / ``genesis`` – nodes, measurements and the sparse RTT graph
-* ``synth``  – synthetic but physically plausible latency worlds
-* ``sim``    – discrete-event engine that keeps re-measuring the graph
-* ``coords`` – network coordinate systems (GNP, Vivaldi)
-* ``select`` – (partly) random node selection strategies
-* ``cluster``/``geoloc`` – datacenter/city/country/continent clustering, CBG
-* ``evm``    – titanoboa harness, on-chain registry and contract audit kit
+The contracts in ``latencymesh/contracts`` are the project. This Python package only
+loads a network description (YAML) into a contract running in titanoboa's in-process
+EVM, so that scenarios and attacks can be written as plain pytest tests.
 """
 
-__version__ = "0.1.0.dev0"
+from .network import Mesh, Network, Node, deploy, load_network
 
-__all__ = ["__version__"]
+__version__ = "0.2.0.dev0"
+
+__all__ = ["Mesh", "Network", "Node", "__version__", "deploy", "load_network"]

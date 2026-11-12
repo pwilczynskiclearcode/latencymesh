@@ -1,144 +1,70 @@
 # latencymesh
 
-**A Python framework for building and attacking systems that rely on network distance (RTT) between nodes,
-with an in-process EVM so the on-chain part can be tested together with the network part.**
+**Vyper contracts for a network of nodes that watch each other, where the watchers
+("witnesses") of a node are chosen by network distance, plus a small Python harness
+for simulating that network and attacking it in tests.**
 
-Many decentralised protocols need to answer questions such as:
+> Status: **pre-alpha**, rebuilt from a minimal core. See [ROADMAP.md](ROADMAP.md).
 
-* *Where is this new node really?* (proof of location, anti-Sybil)
-* *Give me X random nodes that are far apart from each other* (geographically diverse witnesses)
-* *Give me X random nodes around node A* / *the k nearest nodes to A*
-* *Which nodes probably sit in the same datacenter, city, country or continent?*
+The contracts are the project. Everything that happens off-chain between nodes
+(pings, HTTP requests, timeouts) is *not* implemented here: tests fake it and check
+what its outcomes do to the state on-chain.
 
-`latencymesh` keeps a sparse, continuously re-measured RTT graph instead of a full `n × n` matrix,
-embeds nodes into network coordinates and offers selection strategies whose long-run choice
-frequency stays uniform. Everything runs from a seed, so experiments are reproducible, and attacks
-(delay injection, colluding witnesses, proxied multi-site nodes) can be modelled as plain Python.
+## The idea
 
-> Status: **pre-alpha**, under active development. APIs will change. See [ROADMAP.md](ROADMAP.md).
+Every node knows its 3 nearest nodes by measured round-trip time (RTT). For any target
+node this gives three *lines* around it:
 
-## Who is it for
+```
+line 1   the target's 3 nearest nodes
+line 2   the nearest nodes of line 1   (without the target and line 1)
+line 3   the nearest nodes of line 2   (without the target, line 1 and line 2)
+```
 
-* people designing proof-of-location / proof-of-latency / network-monitoring protocols,
-* researchers who want to compare network-coordinate and nearest-neighbour algorithms under attack,
-* smart-contract developers who need a reproducible, simulated network of nodes behind their contracts
-  and a reusable audit test-suite for the token contracts deployed there.
+`WitnessMesh.vy` picks 4 witnesses for a target from a random seed:
 
-## Built with
+| Witness | Drawn from | Why |
+|---|---|---|
+| 1 | line 1 | sees the target from right next to it, even if the rest of the world is cut off |
+| 2 | line 2 | the next ring out |
+| 3 | line 3 | the ring after that |
+| 4 | the whole network | a distant view, and work for nodes far from everyone |
 
-* Python ≥ 3.11, NumPy
-* [titanoboa](https://github.com/vyperlang/titanoboa) as the in-process EVM, contracts written in Vyper
-* pytest + Hypothesis for tests
+If a line is empty, its witness is drawn from the whole network, so there are always
+4 distinct witnesses and never the target itself.
 
-## Getting started
+## The milky-way genesis
+
+[`networks/milky-way`](src/latencymesh/networks/milky-way) is the trusted starting network
+every test begins from: 68 nodes, one per public cloud region of AWS, Google Cloud and Azure
+that can be rented today.
+
+* `nodes.yaml` – hand-written: provider, region, city, country, coordinates.
+* `rtt.yaml` – each node's nearest nodes with RTT. **Currently estimated from city
+  distances** (`tools/estimate_rtt.py`), to be replaced by real measurements.
+
+## Writing a scenario
+
+```python
+from latencymesh.network import seed
+
+
+def test_witnesses_of_frankfurt(mesh):  # `mesh` = milky-way, sealed, on a fresh chain
+    line1, line2, line3 = mesh.lines_of("aws-eu-central-1")
+    witnesses = mesh.witnesses_for("aws-eu-central-1", seed("cycle 1"))
+    # [("azure-germanywestcentral", 1), ("aws-eu-south-1", 2),
+    #  ("aws-ap-southeast-4", 0), ("aws-eu-west-1", 0)]      0 = drawn from the whole network
+    # Frankfurt has no line 3 in this genesis, so its third witness is a global one.
+```
+
+The genesis is deployed once; every test runs inside `boa.env.anchor()` and the chain
+is rewound to the genesis afterwards. `mesh.contract` is the titanoboa contract, so tests
+can call it as any account (`boa.env.prank`) and expect reverts (`boa.reverts`).
 
 ```bash
 uv venv && uv pip install -e ".[dev]"
-uv run pytest          # verbose, with a branch-coverage report
+uv run pytest          # verbose, with coverage
 ```
 
-## A taste
-
-```python
-from latencymesh.synth import WorldConfig, generate_world
-from latencymesh.sim import Simulation
-from latencymesh.coords import Vivaldi
-
-world = generate_world(WorldConfig(n_nodes=500, n_trusted=100, seed=1))  # ground truth
-sim = Simulation.from_genesis(world, probe_budget=4)  # what the network knows
-viv = Vivaldi(dims=5)
-sim.on_measurement(viv.observe)  # coordinates update online
-sim.run(3600)  # one simulated hour
-print(viv.predict("n00120", "n00377"), world.base_rtt("n00120", "n00377"))
-```
-
-### Geographically diverse witnesses, drawn by the contract
-
-`NodeRegistry.vy` selects witnesses on-chain, from public randomness the newcomer cannot
-influence, using measured RTT as the only input:
-
-1. **Regions** – the genesis is split into regions by clustering its RTT matrix
-   (`cluster.regions_from_rtt`). A joining node names its nearest genesis node as *anchor* and
-   inherits its region; the contract checks that the anchor really is at least as close as
-   every witness.
-2. **Draw** – witnesses come from *distinct* regions (weighted by `size^α`: per-region fair,
-   √size, or per-node fair). Inside a region the less frequently selected of two random
-   members is taken (power of two choices), so selection counts stay even over unlimited draws.
-3. **Both directions** – newcomer and witnesses measure each other, commit, then reveal.
-   Neither side has to trust the other.
-4. **Accordance** – pairs agree when `|a − b| ≤ max(abs, rel·min)`. A quorum admits the
-   newcomer. Genesis nodes are always right. Any other node that stays silent, or reports a
-   discrepancy the majority did not see, loses a share of its stake proportional to the
-   newcomer's stake. Each node's record of agreement is kept on-chain (`accordance_bps`).
-
-On a 72-node synthetic world, 45 % of plain random 8-witness sets contain two witnesses closer
-than 300 km to each other; none of the contract's draws do (median closest pair 2 057 km vs
-328 km). Flooding one region with 20 extra nodes does not get more than one of them into any
-draw.
-
-[`examples/join_attacks.py`](examples/join_attacks.py) runs the full join protocol:
-
-```
-honest       ADMITTED  region 0
-             witnesses: Ashburn, Bogota, Dallas, Dubai, Jakarta, Milan, Sao Paulo, Seattle
-rtt-liar     REJECTED  penalised: rtt-liar 0.10 ETH
-fake-tokyo   VETOED    claimed location contradicts witness RTTs
-delay-tokyo  VETOED    claimed location contradicts witness RTTs
-```
-
-What RTT can and cannot prove: a small RTT proves proximity; a large RTT proves nothing,
-because delay can always be added. Distance between witnesses is therefore established through
-their anchors (small, two-sided RTTs to genesis nodes), not through RTTs between the witnesses
-themselves. Independence of operators (e.g. several nodes of one cloud provider in different
-regions) cannot be proven from RTT; see the roadmap.
-
-### Modules
-
-| Module | What it does |
-|---|---|
-| `model`, `graph`, `genesis` | nodes (ASN, lat/lon, country, city, datacenter), measurements, sparse RTT graph, genesis file |
-| `synth` | synthetic world: fibre propagation, routing detours, TIVs, access delay, IXP hops, jitter |
-| `sim` | discrete-event engine, probe policies, hooks for lying/lazy observers |
-| `coords` | GNP and Vivaldi network coordinates |
-| `select` | uniform, balanced, Hilbert-systematic, dispersed, around, k-nearest, iterative nearest, swap-or-not |
-| `cluster`, `geoloc` | datacenter/city/country/continent clustering, CBG geolocation and claim verification |
-| `evm` | titanoboa harness, `NodeRegistry.vy` (regions, diverse witness draws, commit-reveal, accordance and penalties), `MockBeacon.vy`, join protocol, ERC-20 audit kit |
-
-### Auditing token contracts
-
-```python
-from latencymesh.evm.audit import audit_erc20
-
-report = audit_erc20(my_token, holder=deployer)
-assert report.ok, report.summary()
-```
-
-The suite checks EIP-20 behaviour and common pitfalls (allowance accounting, self-transfer
-minting, fee-on-transfer, events, zero-value transfers, transfers to the zero address) and can be
-extended with project-specific checks.
-
-## Trust model in one paragraph
-
-A network starts from a **genesis**: a set of trusted nodes whose locations (lat/lon, ASN, country,
-datacenter…) and pairwise RTTs are known. Everyone who joins later implicitly trusts this starting
-state, much like weak subjectivity checkpoints in proof-of-stake chains. New nodes are positioned only
-relative to nodes that are already accepted.
-
-## Algorithms (implemented from the papers, no third-party code)
-
-| Area | Algorithm | Reference |
-|---|---|---|
-| Coordinates | GNP (landmark-based) | Ng & Zhang, INFOCOM 2002 |
-| Coordinates | Vivaldi (with height vectors) | Dabek et al., SIGCOMM 2004 |
-| Nearest node | Meridian-style iterative search | Wong, Slivkins & Sirer, SIGCOMM 2005 |
-| Geolocation | Constraint-Based Geolocation (CBG) | Gueye et al., IEEE/ACM ToN 2006 |
-| Selection | Power-of-two-choices balancing | Azar et al. 1999; Mitzenmacher 2001 |
-| Selection | Systematic sampling along a Hilbert curve | classic survey-sampling technique |
-| Shuffling | Swap-or-not shuffle | Hoang, Morris & Rogaway, CRYPTO 2012 |
-
-Where every algorithm comes from and why its use is compatible with the MIT license is
-documented in [docs/REFERENCES.md](docs/REFERENCES.md).
-
-## License
-
-MIT, see [LICENSE](LICENSE).
+Built with Vyper 0.4, [titanoboa](https://github.com/vyperlang/titanoboa) (MIT) and
+pytest. All code in this repository is original and MIT licensed, see [LICENSE](LICENSE).
